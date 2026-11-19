@@ -116,6 +116,11 @@ th,td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--line); }
 .cards { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
 .cc { border:2px solid var(--line); border-radius:14px; padding:10px; text-align:center; cursor:pointer; background:var(--card); font:inherit; color:var(--ink); font-weight:600; }
 .cc.sel { border-color:var(--pri); box-shadow:0 0 0 2px color-mix(in srgb,var(--pri) 30%,transparent); }
+.tl { border-left:3px solid var(--pri); margin:8px 0 12px 8px; padding-left: 14px; display:grid; gap:10px; }
+.tl div { position:relative; } .tl div::before { content:''; position:absolute; left:-21px; top:6px; width:10px; height:10px; border-radius:50%; background:var(--pri); }
+.tl > div > b { display:block; font-size:.85rem; color:var(--pri); } .tl span { font-size:.92rem; }
+.ric-k { border:1px solid var(--line); border-radius:12px; padding:9px 12px; margin:8px 0; } .ric-k b { display:block; margin-bottom:2px; }
+.ric-k span { font-size:.93rem; color:var(--ink); }
 @media (max-width:420px){ .tile{min-height:42px;font-size:1.05rem} }
 @media (prefers-reduced-motion: reduce){ *{animation-duration:.01s!important;} }
 </style>
@@ -239,7 +244,7 @@ function botAnswer(si, pl, P, Q, o, diff) {
 let st;
 function freshState() {
   return { step: 'start', si: 0, startStage: 0, land: 1, diff: 'normal', name: '', round: 'A', hB: 5, stock: null, hidden: true, log: [], tries: MAXTRIES,
-    pending: null, give: 'B', n: 5, m: 5, res: [{}, {}], quiz: {}, busy: false, shownRates: false };
+    pending: null, rp: 0, give: 'B', n: 5, m: 5, res: [{}, {}], quiz: {}, busy: false, shownRates: false };
 }
 st = freshState();
 const $ = (s) => document.querySelector(s);
@@ -335,7 +340,7 @@ function trayHtml(B, S) {
 }
 function stepsHtml() {
   if (st.step === 'start') return '';
-  const lab = ['Alleine', 'Handel', 'Auflösung'], cur = { plan: st.round === 'A' ? 0 : 1, prod: st.round === 'A' ? 0 : 1, result: st.round === 'A' ? 0 : 1, trade: 1, resolve: 2, brief: -1, end: 3 }[st.step];
+  const lab = ['Alleine', 'Handel', 'Auflösung'], cur = { plan: st.round === 'A' ? 0 : 1, prod: st.round === 'A' ? 0 : 1, result: st.round === 'A' ? 0 : 1, trade: 1, resolve: 2, brief: -1, ric: 3, end: 3 }[st.step];
   return `<span class="st on">Stufe ${STAGES[st.si].id}</span>` + lab.map((l, i) => `<span class="st ${cur === i ? 'on' : cur > i ? 'done' : ''}">${i + 1} · ${l}</span>`).join('');
 }
 function logHtml() {
@@ -369,7 +374,8 @@ function finishRoundA() { st.res[st.si].A = { p: { ...st.stock[pl()] }, o: { ...
 const main = $('#main');
 function render() {
   $('#steps').innerHTML = stepsHtml(); showStock();
-  const f = { start: rStart, brief: rBrief, plan: rPlan, prod: rProd, result: rResult, trade: rTrade, resolve: rResolve, end: rEnd }[st.step];
+  const f = { start: rStart, brief: rBrief, plan: rPlan, prod: rProd, result: rResult, trade: rTrade, resolve: rResolve, ric: rRic, end: rEnd }[st.step];
+  $('#sceneBox').style.display = st.step === 'ric' ? 'none' : '';
   main.innerHTML = f();
   if (st.step === 'resolve') animateBars();
   const ch = $('#chat'); if (ch) ch.scrollTop = ch.scrollHeight;
@@ -474,8 +480,53 @@ function rResolve() {
     <p><b>Opportunitätskosten</b> = worauf du verzichtest, wenn du eine Stunde für das eine statt das andere Gut nutzt. Ein Tausch lohnt sich für beide, wenn 1 🍔 zwischen <b>${fnum(lo)}</b> und <b>${fnum(hi)}</b> 🥤 kostet.</p></div>
   <div class="card q"><h3>Kurze Frage</h3><p>${q.t}</p>${q.o.map((t, i) => `<button data-q="${i}" class="${qs != null ? (i === q.c ? 'right' : i === qs ? 'wrong' : '') : ''}" ${qs != null ? 'disabled' : ''}>${t}</button>`).join('')}
     ${qs != null ? `<div class="note ${qs === q.c ? 'ok' : 'warn'}">${qs === q.c ? 'Richtig! ' : 'Nicht ganz – die markierte Antwort stimmt. '}</div>` : ''}
-    <button class="pri big" data-act="next" ${qs == null ? 'disabled' : ''}>${st.si === 0 && st.startStage === 0 ? 'Weiter zu Stufe 2' : 'Zum Abschluss'}</button></div>`;
+    <button class="pri big" data-act="next" ${qs == null ? 'disabled' : ''}>${st.si === 0 && st.startStage === 0 ? 'Weiter zu Stufe 2' : 'Zum Abschluss: Wer war Ricardo?'}</button></div>`;
 }
+
+/* ----- Ricardo: Person, Theorie, Erkenntnisse ----- */
+function rRic() {
+  const P = st.rp, tot = 4;
+  const nav = `<div class="btns" style="margin-top:14px">${P > 0 ? '<button data-act="rp" data-d="-1">← Zurück</button>' : ''}<button class="pri" data-act="${P < tot - 1 ? 'rp' : 'ricEnd'}" data-d="1">${P < tot - 1 ? 'Weiter →' : 'Zum Abschluss'}</button></div>`;
+  const dots = '<div class="steps" style="margin:0 0 8px">' + Array.from({ length: tot }, (_, i) => `<span class="st ${i === P ? 'on' : i < P ? 'done' : ''}">${['Die Person', 'Das Beispiel', 'Die Erkenntnisse', 'Grenzen & heute'][i]}</span>`).join('') + '</div>';
+  let body = '';
+  if (P === 0) body = `<h2>🎩 David Ricardo (1772–1823)</h2>
+    <p>Ricardo wurde 1772 in <b>London</b> als Sohn einer aus den Niederlanden eingewanderten jüdischen Händlerfamilie geboren. Mit 14 Jahren arbeitete er an der Börse seines Vaters. Als er eine Quäkerin heiratete, brach er mit seiner Familie und machte sich als Börsenmakler selbstständig. Er wurde so reich, dass er sich mit Anfang 40 aus dem Geschäft zurückzog.</p>
+    <p>1799 las er das Buch „Wohlstand der Nationen" von <b>Adam Smith</b> und wurde Ökonom. 1817 erschien sein Hauptwerk <i>„On the Principles of Political Economy and Taxation"</i>. 1819 wurde er ins britische Parlament gewählt, wo er sich für freien Handel einsetzte.</p>
+    <h3>Seine Zeit</h3>
+    <div class="tl">
+      <div><b>~1760–1840</b><span>Industrielle Revolution: Dampfmaschinen, Fabriken, wachsende Städte in England</span></div>
+      <div><b>1803–1815</b><span>Napoleonische Kriege; Napoleon sperrt 1806 die Häfen Europas für britische Waren (Kontinentalsperre)</span></div>
+      <div><b>1815</b><span>Die britischen <b>Korngesetze</b> verteuern Getreideeinfuhren, um Großgrundbesitzer zu schützen. Ricardo ist dagegen.</span></div>
+      <div><b>1817</b><span>Ricardo veröffentlicht seine Theorie des Außenhandels</span></div>
+      <div><b>1823</b><span>Ricardo stirbt auf seinem Landgut in Gloucestershire</span></div>
+    </div>
+    <div class="note"><b>Der Streit damals:</b> Sollte England Getreide aus dem Ausland einführen dürfen? Großgrundbesitzer sagten nein, Fabrikbesitzer und viele Arbeiter ja, weil Brot dann billiger wird. Ricardo suchte eine allgemeine Antwort: <b>Wann lohnt sich Handel zwischen Ländern?</b></div>`;
+  if (P === 1) body = `<h2>🍷 Das berühmte Beispiel: England und Portugal</h2>
+    <p>Ricardo verglich zwei Länder, die <b>Tuch</b> 🧵 und <b>Wein</b> 🍷 herstellen. Die Zahlen geben an, wie viele Arbeitsjahre für <i>eine</i> Einheit nötig sind (weniger ist besser):</p>
+    <table><tr><th></th><th>🧵 Tuch</th><th>🍷 Wein</th></tr><tr><td>🇬🇧 England</td><td>100</td><td>120</td></tr><tr><td>🇵🇹 Portugal</td><td>90</td><td>80</td></tr></table>
+    <p style="margin-top:10px">Portugal ist bei <b>beidem</b> besser, es hat bei beiden einen absoluten Vorteil. Trotzdem lohnt sich der Handel:</p>
+    <table><tr><th></th><th>1 Tuch kostet …</th><th>1 Wein kostet …</th></tr><tr><td>🇬🇧 England</td><td>0,83 Wein</td><td>1,2 Tuch</td></tr><tr><td>🇵🇹 Portugal</td><td>1,13 Wein</td><td>0,89 Tuch</td></tr></table>
+    <p style="margin-top:10px">England verzichtet beim Tuch auf weniger Wein als Portugal, Portugal verzichtet beim Wein auf weniger Tuch. Also konzentriert sich <b>England auf Tuch</b> und <b>Portugal auf Wein</b>.</p>
+    <div class="note ok"><b>Ergebnis bei gleichem Arbeitseinsatz</b> (England 220, Portugal 170 Arbeitsjahre):<br>ohne Handel: 2 Tuch und 2 Wein.<br>mit Spezialisierung: <b>2,2 Tuch</b> (England) und <b>2,125 Wein</b> (Portugal), also von beidem mehr. Durch Tausch bekommen beide Länder etwas davon.</div>
+    <p class="small mut">Das ist dein Spiel in Stufe 2: Grünland (wie Portugal) war überall besser, und der Handel lohnte sich trotzdem.</p>`;
+  if (P === 2) body = `<h2>💡 Die wichtigsten Erkenntnisse</h2>
+    <div class="ric-k"><b>1 · Absoluter Vorteil</b><span>Wer pro Stunde mehr schafft, hat einen absoluten Vorteil (Adam Smith). Das war deine <b>Stufe 1</b>: Jedes Land konnte etwas besser.</span></div>
+    <div class="ric-k"><b>2 · Komparativer Vorteil</b><span>Ricardos Kernidee: Entscheidend ist nicht, wer mehr schafft, sondern wer <b>relativ</b> besser ist, also wer beim Verzicht auf das andere Gut weniger aufgibt (<b>Opportunitätskosten</b>). Das war <b>Stufe 2</b>.</span></div>
+    <div class="ric-k"><b>3 · Beide gewinnen</b><span>Auch das schwächere Land profitiert und auch das stärkere. Mit Arbeitsteilung und Tausch entsteht insgesamt mehr (im Spiel: mehr Menüs). Handel ist kein Nullsummenspiel.</span></div>
+    <div class="ric-k"><b>4 · Der Preis liegt dazwischen</b><span>Der Tausch lohnt sich für beide nur, wenn das Tauschverhältnis zwischen den beiden Opportunitätskosten liegt. Wo genau, wird <b>verhandelt</b>, und davon hängt ab, wer mehr vom Gewinn bekommt.</span></div>
+    <div class="ric-k"><b>5 · Spezialisieren</b><span>Jedes Land konzentriert sich auf das Gut mit den niedrigsten Opportunitätskosten und kauft den Rest ein.</span></div>`;
+  if (P === 3) body = `<h2>🌍 Grenzen der Theorie – und heute</h2>
+    <p>Ricardos Modell ist bewusst einfach: zwei Länder, zwei Güter, nur Arbeit als Produktionsfaktor, keine Transportkosten. In der Wirklichkeit gibt es Folgendes:</p>
+    <div class="ric-k"><b>Gewinner und Verlierer im Land</b><span>Im Ganzen gewinnt ein Land, aber Beschäftigte in Branchen, die schrumpfen, verlieren oft ihre Arbeitsplätze und müssen umlernen oder umziehen.</span></div>
+    <div class="ric-k"><b>Abhängigkeit</b><span>Wer sich stark spezialisiert, wird abhängiger von Handelspartnern (zum Beispiel in Krisen oder Kriegen).</span></div>
+    <div class="ric-k"><b>Junge Industrien</b><span>Ein Land kann einen Vorteil erst aufbauen. Manche Staaten schützen neue Branchen deshalb zeitweise durch Zölle.</span></div>
+    <div class="ric-k"><b>Weitere Faktoren</b><span>Transportkosten, Umweltfolgen, mehr als zwei Länder und Güter, Kapital und Know-how.</span></div>
+    <div class="note"><b>Heute</b> ist die Idee eine Grundlage der Handelspolitik und der Welthandelsorganisation (WTO). Sie hilft zu verstehen, warum Länder Autos, Handys oder Kleidung auch dann tauschen, wenn sie alles selbst herstellen könnten.</div>
+    <h3>Zum Diskutieren</h3>
+    <p>• Warum sollte ein Land, das alles besser kann, trotzdem handeln?<br>• Wer verliert, wenn Billigimporte kommen, und was könnte helfen?<br>• Wo ist Spezialisierung auch riskant?</p>`;
+  return `<div class="card">${dots}${body}${nav}</div>`;
+}
+
 function animateBars() {
   const seen = st.barsSeen === st.si; st.barsSeen = st.si;
   setTimeout(() => document.querySelectorAll('.bar i').forEach((el) => { if (seen) el.style.transition = 'none'; el.style.width = Math.max(+el.dataset.w, 12) + '%'; }), seen ? 0 : 80);
@@ -519,7 +570,9 @@ main.addEventListener('click', async (ev) => {
     case 'acceptPending': { const o = st.pending; st.pending = null; return execDeal(o, true); }
     case 'dropPending': st.pending = null; say('sys', 'Gegenvorschlag abgelehnt.'); return render();
     case 'endTrade': st.pending = null; return finishTradeNow();
-    case 'next': if (st.si === 0 && st.startStage === 0) { return startStage(1); } return go('end');
+    case 'next': if (st.si === 0 && st.startStage === 0) { return startStage(1); } st.rp = 0; return go('ric');
+    case 'ricEnd': return go('end');
+    case 'rp': st.rp = Math.max(0, Math.min(3, st.rp + +d.d)); return go('ric');
     case 'again': st = freshState(); return render();
     case 'copy': try { await navigator.clipboard.writeText(summaryText()); t.textContent = '✓ Kopiert'; } catch (e) { t.textContent = 'Markieren und kopieren'; } return;
   }
@@ -533,9 +586,8 @@ async function execDeal(o, fromBot) {
   await tradeAnim(o);
   st.stock[pl()] = r.P; st.stock[bl()] = r.Q; st.hidden = true; showStock();
   st.busy = false;
-  st.n = Math.min(st.n, st.stock[pl()][st.give]);
-  if (st.tries < 1) { say('sys', 'Alle Verhandlungsschritte sind verbraucht.'); return finishTradeNow(); }
-  render();
+  say('sys', 'Handel abgeschlossen.'); st.hidden = false; showStock(); render();
+  await sleep(1400); finishTrade();
 }
 async function doOffer() {
   const P = st.stock[pl()], Q = st.stock[bl()], o = { give: st.give, n: Math.min(st.n, P[st.give]), m: st.m };
